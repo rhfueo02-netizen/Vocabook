@@ -96,6 +96,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ai-result-trans{font-size:12px;color:var(--text3)}
 .ai-loading{text-align:center;padding:12px;color:var(--text3);font-size:13px;display:none}
 
+/* Calendar */
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.cal-title{font-size:16px;font-weight:700;color:var(--pink-dark)}
+.cal-nav{background:none;border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--text2);font-family:inherit}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:1rem}
+.cal-day-label{text-align:center;font-size:11px;font-weight:600;color:var(--text3);padding:4px 0}
+.cal-day{text-align:center;padding:6px 2px;border-radius:8px;font-size:13px;cursor:pointer;transition:background 0.1s;min-height:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.cal-day.empty{cursor:default}
+.cal-day.has-words{background:var(--pink-light);color:var(--pink-dark);font-weight:600}
+.cal-day.today{border:1.5px solid var(--pink)}
+.cal-day.selected{background:var(--pink);color:#fff}
+.cal-day.selected .cal-count{color:rgba(255,255,255,0.8)}
+.cal-count{font-size:10px;color:var(--pink);font-weight:600}
+.cal-day.selected .cal-count{color:rgba(255,255,255,0.8)}
+.cal-detail{background:var(--card);border-radius:12px;padding:14px;border:1px solid var(--border)}
+.cal-detail-title{font-size:13px;font-weight:700;color:var(--pink-dark);margin-bottom:10px}
+.cal-word-item{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--pink-light);font-size:13px}
+.cal-word-item:last-child{border-bottom:none}
+
 input[type=file]{display:none}
 </style>
 </head>
@@ -117,6 +136,7 @@ input[type=file]{display:none}
     <div class="nav">
       <button class="nav-btn active" id="navWords" onclick="switchTab('words')">단어</button>
       <button class="nav-btn" id="navBookmarks" onclick="switchTab('bookmarks')">북마크 🩷</button>
+      <button class="nav-btn" id="navCalendar" onclick="switchTab('calendar')">달력 📅</button>
     </div>
   </div>
   <div id="dateRow" class="date-row"></div>
@@ -246,6 +266,7 @@ function switchTab(tab){
   curTab=tab;search='';openIdx=null;revealed={};quizMode=false;
   document.getElementById('navWords').classList.toggle('active',tab==='words');
   document.getElementById('navBookmarks').classList.toggle('active',tab==='bookmarks');
+  document.getElementById('navCalendar').classList.toggle('active',tab==='calendar');
   renderDateRow();renderMain();
 }
 function selectDate(d){curDate=d;search='';openIdx=null;revealed={};quizMode=false;render()}
@@ -264,13 +285,14 @@ function render(){renderDateRow();renderMain()}
 function renderDateRow(){
   const el=document.getElementById('dateRow');
   const dates=getDates();
-  if(curTab==='bookmarks'||dates.length===0){el.style.display='none';return}
+  if(curTab==='bookmarks'||curTab==='calendar'||dates.length===0){el.style.display='none';return}
   el.style.display='flex';
   el.innerHTML=dates.map(d=>'<button class="dtab '+(d===curDate?'active':'')+'" onclick="selectDate(\''+d+'\')">'+fmtDate(d)+'</button>').join('');
 }
 function renderMain(){
   const el=document.getElementById('mainContent');
   if(curTab==='bookmarks'){renderBookmarks(el);return}
+  if(curTab==='calendar'){renderCalendar(el);return}
   renderWords(el);
 }
 function renderWords(el){
@@ -390,7 +412,7 @@ function speak(word, example, e) {
 }
 
 // ── AI 단어 검색 ───────────────────────────────────────
-const CLAUDE_KEY = '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';
+const CLAUDE_KEY = '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';
 let aiCurrentWord = null;
 
 function showAI(){
@@ -468,6 +490,60 @@ async function aiSave(){
   hideAI();
   render();
 }
+
+// ── Calendar ───────────────────────────────────────────
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let calSelected = null;
+
+function renderCalendar(el) {
+  const today = new Date();
+  const todayIso = todayStr();
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const dayLabels = ['일','월','화','수','목','금','토'];
+
+  let html = '<div class="cal-header">'
+    +'<button class="cal-nav" onclick="calPrev()">◀</button>'
+    +'<div class="cal-title">'+calYear+'년 '+monthNames[calMonth]+'</div>'
+    +'<button class="cal-nav" onclick="calNext()">▶</button>'
+    +'</div>'
+    +'<div class="cal-grid">';
+
+  dayLabels.forEach(function(d){ html+='<div class="cal-day-label">'+d+'</div>'; });
+
+  for(let i=0;i<firstDay;i++) html+='<div class="cal-day empty"></div>';
+
+  for(let d=1;d<=daysInMonth;d++){
+    const iso = calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const words = data[iso] ? data[iso].words.length : 0;
+    const isToday = iso===todayIso;
+    const isSelected = iso===calSelected;
+    const hasWords = words>0;
+    html+='<div class="cal-day'+(hasWords?' has-words':'')+(isToday?' today':'')+(isSelected?' selected':'')+'" onclick="calSelect(\''+iso+'\')">'
+      +'<span>'+d+'</span>'
+      +(hasWords?'<span class="cal-count">'+words+'</span>':'')
+      +'</div>';
+  }
+  html+='</div>';
+
+  if(calSelected && data[calSelected] && data[calSelected].words.length>0){
+    const words = data[calSelected].words;
+    html+='<div class="cal-detail">'
+      +'<div class="cal-detail-title">'+calSelected+' · '+words.length+'개</div>';
+    words.forEach(function(w){
+      html+='<div class="cal-word-item"><span style="font-weight:600">'+w.word+'</span><span style="color:var(--pink)">'+w.meaning+'</span></div>';
+    });
+    html+='</div>';
+  }
+
+  el.innerHTML=html;
+}
+
+function calPrev(){ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderMain(); }
+function calNext(){ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderMain(); }
+function calSelect(iso){ calSelected=calSelected===iso?null:iso; renderMain(); }
 
 // ── Widget Export ──────────────────────────────────────
 function exportToWidget(){
