@@ -546,13 +546,18 @@ function calSelect(iso){ calSelected=calSelected===iso?null:iso; renderMain(); }
 function exportToWidget(){
   const today=todayStr();
   const day=getDay(today);
-  if(!day.words||day.words.length===0){
-    alert('오늘 단어가 없어요!\n먼저 단어를 추가해주세요.');
-    return;
-  }
-  // Scriptable FileManager에 저장하는 방식:
-  // 데이터를 URL 파라미터로 넘겨서 Scriptable 스크립트가 저장하도록 함
-  const payload=encodeURIComponent(JSON.stringify(day.words));
+  // 전체 날짜에서 북마크된 단어 모으기
+  const bmWords=[];
+  getDates().forEach(function(date){
+    const d=getDay(date);
+    d.words.forEach(function(w,i){
+      if(d.bookmarks[i]) bmWords.push(w);
+    });
+  });
+  const payload=encodeURIComponent(JSON.stringify({
+    todayWords: day.words||[],
+    bookmarks: bmWords
+  }));
   const scriptableURL='scriptable:///run?scriptName=%EB%8B%A8%EC%96%B4%EC%9E%A5_%EC%9C%84%EC%A0%AF&data='+payload;
   window.location.href=scriptableURL;
 }
