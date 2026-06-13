@@ -48,9 +48,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .card-header{display:flex;align-items:flex-start;gap:8px}
 .card-body{flex:1;cursor:pointer}
 .card-no{font-size:10px;color:var(--text3);margin-bottom:3px;font-weight:600}
-.card-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
-.card-word{font-size:15px;font-weight:700;flex:1;line-height:1.4;color:var(--text);min-width:0;word-break:break-word}
-.card-meaning{font-size:13px;font-weight:600;color:var(--pink);flex-shrink:0;max-width:45%;text-align:right}
+.card-row{display:flex;flex-direction:column;gap:3px}
+.card-word{font-size:15px;font-weight:700;line-height:1.4;color:var(--text);word-break:break-word}
+.card-meaning{font-size:13px;font-weight:500;color:var(--pink)}
 .card-hint{font-size:13px;color:var(--text3);flex-shrink:0}
 .card-detail{margin-top:10px;padding-top:10px;border-top:1px solid var(--pink-light);display:none}
 .card.open .card-detail,.card.revealed .card-detail{display:block}
@@ -70,6 +70,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .bm-empty{text-align:center;padding:4rem 1rem}
 .bm-empty-icon{font-size:48px;margin-bottom:14px}
 .bm-empty p{font-size:15px;color:var(--text2)}
+.card .bm-meaning{display:none!important}
+.card .bm-hint{display:block}
+.card.open .bm-meaning{display:block!important}
+.card.open .bm-hint{display:none!important}
 
 /* Paste modal */
 .overlay{position:fixed;inset:0;background:rgba(45,26,34,0.4);z-index:100;display:flex;align-items:flex-end;justify-content:center}
@@ -326,7 +330,6 @@ function renderWords(el){
   let html='<div class="stats">'
     +'<div class="stat"><div class="stat-label">단어</div><div class="stat-val">'+words.length+'</div></div>'
     +'<div class="stat"><div class="stat-label">북마크</div><div class="stat-val" style="color:var(--pink)">'+Object.values(day.bookmarks).filter(Boolean).length+'</div></div>'
-    +'<div class="stat '+(quizMode?'quiz-on':'quiz-off')+'" onclick="toggleQuiz()"><div class="stat-label">모드</div><div class="stat-val">'+(quizMode?'퀴즈 ✓':'퀴즈')+'</div></div>'
     +'</div>'
     +'<div class="search-wrap"><span class="search-icon">🔍</span>'
     +'<input type="text" placeholder="단어 검색..." value="'+search.replace(/"/g,'&quot;')+'" oninput="doSearch(this.value)"></div>';
@@ -339,12 +342,12 @@ function renderWords(el){
       const isBm=day.bookmarks[realIdx]||false;
       var wordEsc=w.word.replace(/'/g,"\\'");
       var exEsc=(w.example||'').replace(/'/g,"\\'");
-      html+='<div class="card '+(isOpen?'open ':'')+( isRevealed?'revealed':'')+'">'
+      html+='<div class="card '+(isOpen?'open':'')+'">'
         +'<div class="card-header">'
         +'<div class="card-body" onclick="tapCard('+i+')">'
         +'<div class="card-no">#'+w.no+'</div>'
         +'<div class="card-row"><div class="card-word">'+w.word+'</div>'
-        +(quizMode&&!isRevealed?'<div class="card-hint">탭해서 확인</div>':'<div class="card-meaning">'+w.meaning+'</div>')
+        +'<div class="card-meaning">'+w.meaning+'</div>'
         +'</div>'
         +(w.example?'<div class="card-detail"><div class="card-example">'+w.example+'</div>'+(w.translation?'<div class="card-trans">'+w.translation+'</div>':'')+'</div>':'')
         +(isOpen?'<div style="margin-top:10px"><button onclick="deleteWord(\''+curDate+'\','+realIdx+',event)" style="font-size:12px;color:#ff6b6b;border:1px solid #ff6b6b;background:none;border-radius:20px;padding:4px 12px;cursor:pointer;font-family:inherit">🗑 삭제</button></div>':'')
@@ -371,10 +374,15 @@ function renderBookmarks(el){
       const realIdx=day.words.indexOf(w);
       var wordEsc=w.word.replace(/'/g,"\\'");
       var exEsc=(w.example||'').replace(/'/g,"\\'");
-      html+='<div class="card"><div class="card-header">'
-        +'<div class="card-body" onclick="this.parentElement.parentElement.classList.toggle(\'open\')">'
+      html+='<div class="card" onclick="this.classList.toggle(\'open\')">'
+        +'<div class="card-header">'
+        +'<div class="card-body">'
         +'<div class="card-no">#'+w.no+'</div>'
-        +'<div class="card-row"><div class="card-word">'+w.word+'</div><div class="card-meaning">'+w.meaning+'</div></div>'
+        +'<div class="card-row">'
+        +'<div class="card-word">'+w.word+'</div>'
+        +'<div class="card-meaning" style="display:none" class="bm-meaning">'+w.meaning+'</div>'
+        +'<div class="card-hint bm-hint" style="font-size:12px;color:var(--text3)">탭해서 뜻 확인</div>'
+        +'</div>'
         +(w.example?'<div class="card-detail"><div class="card-example">'+w.example+'</div>'+(w.translation?'<div class="card-trans">'+w.translation+'</div>':'')+'</div>':'')
         +'</div>'
         +'<div class="card-actions">'
@@ -422,9 +430,26 @@ function speak(word, example, e) {
   e.stopPropagation();
   if(!window.speechSynthesis)return;
   window.speechSynthesis.cancel();
-  var u1=new SpeechSynthesisUtterance(word);
-  u1.lang='en-US';u1.rate=0.85;
-  window.speechSynthesis.speak(u1);
+
+  const voices = window.speechSynthesis.getVoices();
+  // 자연스러운 영어 목소리 우선순위
+  const preferred = [
+    'Samantha', 'Karen', 'Daniel', 'Moira', 'Tessa',
+    'Aaron', 'Fred', 'Alex', 'Victoria', 'Allison'
+  ];
+  let voice = null;
+  for(const name of preferred){
+    voice = voices.find(v => v.name.includes(name) && v.lang.startsWith('en'));
+    if(voice) break;
+  }
+  if(!voice) voice = voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en'));
+
+  var u = new SpeechSynthesisUtterance(word);
+  u.lang = 'en-US';
+  u.rate = 0.85;
+  u.pitch = 1.0;
+  if(voice) u.voice = voice;
+  window.speechSynthesis.speak(u);
 }
 
 // ── AI 단어 검색 ───────────────────────────────────────
