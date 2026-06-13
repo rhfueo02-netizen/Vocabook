@@ -130,7 +130,7 @@ input[type=file]{display:none}
           📎 엑셀
           <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
         </label>
-        <button class="upload-btn" onclick="exportToWidget()" style="font-size:12px">📲 위젯</button>
+        <button class="upload-btn" onclick="exportToWidget()" style="display:none;font-size:12px">📲 위젯</button>
       </div>
     </div>
     <div class="nav">
@@ -280,7 +280,22 @@ async function toggleBookmark(date,idx,e){
   await saveDate(date);render();
 }
 
-// ── Render ─────────────────────────────────────────────
+async function deleteWord(date, idx, e){
+  e.stopPropagation();
+  const day=getDay(date);
+  day.words.splice(idx,1);
+  // 북마크 인덱스 재정렬
+  const newBookmarks={};
+  Object.keys(day.bookmarks).forEach(function(k){
+    const ki=parseInt(k);
+    if(ki<idx && day.bookmarks[k]) newBookmarks[ki]=true;
+    else if(ki>idx && day.bookmarks[k]) newBookmarks[ki-1]=true;
+  });
+  day.bookmarks=newBookmarks;
+  await saveDate(date);
+  openIdx=null;
+  render();
+}
 function render(){renderDateRow();renderMain()}
 function renderDateRow(){
   const el=document.getElementById('dateRow');
@@ -332,6 +347,7 @@ function renderWords(el){
         +(quizMode&&!isRevealed?'<div class="card-hint">탭해서 확인</div>':'<div class="card-meaning">'+w.meaning+'</div>')
         +'</div>'
         +(w.example?'<div class="card-detail"><div class="card-example">'+w.example+'</div>'+(w.translation?'<div class="card-trans">'+w.translation+'</div>':'')+'</div>':'')
+        +(isOpen?'<div style="margin-top:10px"><button onclick="deleteWord(\''+curDate+'\','+realIdx+',event)" style="font-size:12px;color:#ff6b6b;border:1px solid #ff6b6b;background:none;border-radius:20px;padding:4px 12px;cursor:pointer;font-family:inherit">🗑 삭제</button></div>':'')
         +'</div>'
         +'<div class="card-actions">'
         +'<button class="speak-btn" onclick="speak(\''+wordEsc+'\',\''+exEsc+'\',event)" title="발음 듣기">🔊</button>'
